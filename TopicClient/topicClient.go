@@ -22,7 +22,7 @@ var data = `
 topics:
   - topic: 
     name: "lall.fasel.03"
-    partitions: "10"
+    partitions: 10
     replication: 3
     retentionms: 234000000
    
@@ -52,6 +52,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
+	//range config.Cfgs[id].Bar
+	for t := range topix.Tops {
+		//	fmt.Printf("topic %v\n", topix.Tops[t])
+		fmt.Printf("topic: %s, parts: %d, replicas: %v; ret days %v\n",
+			topix.Tops[t].Name, topix.Tops[t].Partitions, topix.Tops[t].Replication, topix.Tops[t].Retentionms)
 
+	}
 	fmt.Printf("--- config:\n%v\n\n", topix)
 }
