@@ -14,32 +14,50 @@ import (
 )
 
 const (
-	zookeeperhost = "localhost"
-	zookeeperport = "2181"
+	zookeeperHost = "localhost"
+	zookeeperPort = "2181"
 )
 
 var (
-	topic map[string]string
+	DefaultTopicSettings map[string]string
 )
 
 //Resultset  Json for output
 type Resultset struct {
-	Command   string    `json:"cmd"`
-	Stdout    string    `json:"stdout"`
-	Stderr    string    `json:"stderr,omitempty"`
-	Starttime time.Time `json:"starttime"`
-	Stoptime  time.Time `json:"stoptime"`
-	Secounds  int       `json:"seconds"`
-	Result    bool      `json:"succesful"`
-	ErrorStr  string    `json:"errorstr,omitempty"`
+	OSCommand            string    `json:"os.cmd"`
+	Stdout               string    `json:"stdout"`
+	Stderr               string    `json:"stderr,omitempty"`
+	CmdStarttime         time.Time `json:"cmd.starttime"`
+	CMDStoptime          time.Time `json:"=md.stoptime"`
+	DurationSecounds     int       `json:"duration.seconds"`
+	SuccessfullExecution bool      `json:"succesful"`
+	ErrorStr             string    `json:"errorstr,omitempty"`
 }
+type Topic struct {
+	Name              string
+	NumberPartitions  int
+	ReplicationFactor int
+	Retentionms       int
+}
+
+var topicURL = "https://raw.githubusercontent.com/heinrichgrt/meinereinerseins/master/TopicClient/topic.yml"
 
 func selfInit() {
 	// set the topic defaults
-	topic = make(map[string]string)
-	topic["noofreplicas"] = "1"
-	topic["noofpartitions"] = "1"
-	topic["retiontionms"] = "2592000000"
+	DefaultTopicSettings = make(map[string]string)
+	DefaultTopicSettings["noofreplicas"] = "1"
+	DefaultTopicSettings["noofpartitions"] = "1"
+	DefaultTopicSettings["retiontionms"] = "2592000000"
+}
+
+type Topics struct {
+	Tops []Topic `topics`
+}
+
+func readTopicData() *Topics {
+	var t Topics
+
+	return &t
 }
 
 func setDefaultTopicValue(r *http.Request, v string) string {
