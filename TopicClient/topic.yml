@@ -3,7 +3,7 @@ topics:
   - topic: 
     topic.name: "lall.fasel.04"
     number.of.partitions: 10
-    replication.factor: 1
+    replication.factor: 2
     config.retentionms: 234000000
    
   - topic: 
