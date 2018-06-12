@@ -1,0 +1,15 @@
+---
+ACLs:
+  - rule:
+    topic.name: "branch.lall.fasel.05"
+    user: "lallfaseluser"
+    action: "add"
+    role: "read"
+    
+  - rule:
+    toppic.name: "branch.lall.fasel.04"
+    user: "lallfaseluser"
+    action: "add"
+    role: "write"
+     
+
