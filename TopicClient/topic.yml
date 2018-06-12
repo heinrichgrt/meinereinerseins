@@ -1,14 +1,14 @@
 ---
 topics:
   - topic: 
-    name: "lall.fasel.03"
-    partitions: 10
-    replication: 3
-    retentionms: 234000000
+    topic.name: "lall.fasel.04"
+    number.of.partitions: 10
+    replication.factor: 2
+    config.retentionms: 234000000
    
   - topic: 
-    name: "branch.lall.fasel.04"
-    partitions: 10
-    replication: 3
-    retentionms: 234000000
-  
+    topic.name: "branch.lall.fasel.05"
+    number.of.partitions: 10
+    replication.factor: 1
+    config.retentionms: 234000000
+    
