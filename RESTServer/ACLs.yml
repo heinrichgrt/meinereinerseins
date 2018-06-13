@@ -1,12 +1,12 @@
 ---
-ACLs:
-  - rule:
+acls:
+  - acl:
     topic.name: "branch.lall.fasel.05"
     user: "lallfaseluser"
     action: "add"
     role: "read"
     
-  - rule:
+  - acl:
     toppic.name: "branch.lall.fasel.04"
     user: "lallfaseluser"
     action: "add"
