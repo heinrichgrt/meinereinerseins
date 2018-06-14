@@ -7,7 +7,7 @@ acls:
     role: "read"
     
   - acl:
-    toppic.name: "branch.lall.fasel.04"
+    topic.name: "branch.lall.fasel.04"
     user: "lallfaseluser"
     action: "add"
     role: "write"
