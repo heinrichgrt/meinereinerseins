@@ -4,12 +4,12 @@ acls:
     topic.name: "branch.lall.fasel.05"
     user: "lallfaseluser"
     action: "add"
-    role: "read"
+    role: "producer"
     
   - acl:
     topic.name: "branch.lall.fasel.04"
     user: "lallfaseluser"
     action: "add"
-    role: "write"
+    role: "consumer"
      
 
