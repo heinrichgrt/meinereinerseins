@@ -12,3 +12,8 @@ topics:
     replication.factor: 1
     config.retentionms: 234000000
 
+  - topic: 
+    topic.name: "branch.lall.fasel.06"
+    number.of.partitions: 10
+    replication.factor: 1
+    config.retentionms: 23400000
