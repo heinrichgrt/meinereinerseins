@@ -1,15 +1,15 @@
 ---
-ACLs:
-  - rule:
+acls:
+  - acl:
     topic.name: "branch.lall.fasel.05"
     user: "lallfaseluser"
     action: "add"
-    role: "read"
+    role: "producer"
     
-  - rule:
-    toppic.name: "branch.lall.fasel.04"
+  - acl:
+    topic.name: "branch.lall.fasel.04"
     user: "lallfaseluser"
     action: "add"
-    role: "write"
+    role: "consumer"
      
 
