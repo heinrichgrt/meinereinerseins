@@ -1,0 +1,12 @@
+FROM golang:jessie as builder
+RUN mkdir /build 
+ADD . /build/
+WORKDIR /build 
+RUN go get gopkg.in/yaml.v2/
+RUN go build -ldflags "-linkmode external -extldflags -static" -a   v-o topicClient .
+FROM alpine
+RUN adduser -S -D -H -h /app appuser
+USER appuser
+COPY --from=builder /build/topicClient /app/
+WORKDIR /app
+CMD ["./topicClient"]
