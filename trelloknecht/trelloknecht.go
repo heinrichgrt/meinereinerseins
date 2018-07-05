@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/adlio/trello"
@@ -12,6 +13,7 @@ import (
 )
 
 var (
+	// pdf setings
 	fontFamily        = "Helvetica"
 	pdfUnitStr        = "mm"
 	pdfDocDimension   = []float64{100.0, 62.0}
@@ -24,10 +26,18 @@ var (
 	headFontSize      = 14.0
 	headTopMargin     = 5.0
 	blackRectPos      = []float64{2.0, 2.0, 96.0, 58.0}
+	// trello settings
+	trelloAppKey       = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
+	trelloToken        = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
+	toPrintedLabelName = "PRINTME_NDL"
+	trelloUserName     = "kls_drucker"
+	boardsToWatch      = []string{"DevOps 2020 - Board", "SAP Backlog KLS"}
+	labelName          = "PRINTME_NDL"
+
+	//utility vars
+	boardNameByID = make(map[string]string)
+	listNameByID  = make(map[string]string)
 )
-var trelloAppKey = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
-var trelloToken = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
-var toPrintedLabelName = "PRINTME_NDL"
 
 func registerQR(pdf *gofpdf.Fpdf) {
 
@@ -83,8 +93,55 @@ func pdfBaseSetup() *gofpdf.Fpdf {
 	pdf.AddPage()
 	return pdf
 }
+func writeLabels(cardList []*trello.Card) []*gofpdf.Fpdf {
+	pdfList := make([]*gofpdf.Fpdf, 0)
+	for _, card := range cardList {
+		pdf := pdfBaseSetup()
+		writeLabel(pdf, card)
 
-func writeLabel(pdf *gofpdf.Fpdf) {
+	}
+	return pdfList
+}
+
+func getBoards(client *trello.Client) []*trello.Board {
+	member, err := client.GetMember(trelloUserName, trello.Defaults())
+	if err != nil {
+		log.Fatal("Cannot  get member info from trello")
+	}
+
+	boards, err := member.GetBoards(trello.Defaults())
+	if err != nil {
+		log.Fatal("Cannot get board lists from trello")
+	}
+	return boards
+}
+func joinedLabel(card *trello.Card) string {
+	labelString := ""
+	labelList := make([]string, 0)
+	for _, label := range card.Labels {
+		if matched, _ := regexp.MatchString("PRINT.*", label.Name); matched == false {
+			labelList = append(labelList, label.Name)
+		}
+	}
+	labelString = strings.Join(labelList, ", ")
+	return labelString
+}
+
+func filterBoards(userBoards []*trello.Board) []*trello.Board {
+	boardList := make([]*trello.Board, 0)
+	for boardID := range userBoards {
+		fmt.Printf("id: %v, board: %v", boardID, userBoards[boardID])
+		x := userBoards[boardID].Name
+		for watchID := range boardsToWatch {
+			if x == boardsToWatch[watchID] {
+				boardList = append(boardList, userBoards[boardID])
+			}
+		}
+
+	}
+	return boardList
+}
+func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) {
 
 	pdf.SetFont(fontFamily, headFontStyle, headFontSize)
 	_, lineHt := pdf.GetFontSize()
@@ -93,15 +150,16 @@ func writeLabel(pdf *gofpdf.Fpdf) {
 	xx, yy := pdf.GetXY()
 
 	pdf.Rect(blackRectPos[0], blackRectPos[1], blackRectPos[2], blackRectPos[3], "D")
-	headerString := "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod temporinviduntutlaboreetdoloremagnaaliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. das wir unbedingt tun wollen aber uns nicht trauen. Wir wissen ja nicht immer so genau was fehlt aber"
-	boardName := "DevOps 2020"
-	columnName := "Konzeption"
-	htmlString := "<center>" + shortenStringIfToLong(insstring) + "</center>"
+	headerString := card.Name
+
+	//columnName := card.Labels
+	columnName := card.IDList
+	htmlString := "<center>" + shortenStringIfToLong(headerString) + "</center>"
 
 	html := pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
 
-	htmlString = "<left>" + boardName + " | " + columnName + "</left>"
+	htmlString = "<left>" + boardNameByID[card.IDBoard] + " | " + columnName + "</left>"
 	xx, yy = pdf.GetXY()
 	//fmt.Printf("x %v und y %v", xx, yy)
 	pdf.SetFont("Times", "I", 8)
@@ -113,7 +171,7 @@ func writeLabel(pdf *gofpdf.Fpdf) {
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
 	lowerx := pdf.GetX()
-	htmlString = "<right>Down on the right side</right>"
+	htmlString = "<right>" + joinedLabel(card) + "</right>"
 	pdf.SetX(lowerx + 1)
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
@@ -135,12 +193,75 @@ func writeLabel(pdf *gofpdf.Fpdf) {
 	}
 
 }
+func boarListIDsToNames(board *trello.Board) {
+	list, _ := board.GetLists(trello.Defaults())
+	fmt.Println("%v", list)
+}
+func getLabels() []*trello.Card {
+	cardList := make([]*trello.Card, 0)
+	client := trello.NewClient(trelloAppKey, trelloToken)
+	boards := getBoards(client)
+	list, _ := client.GetList("5a53520750c9f99b20f6c7b9", trello.Defaults())
+	fmt.Printf("%v", list)
+	// filteredBoards := filterBoards(boards)
+	for _, board := range filterBoards(boards) {
+		boardNameByID[board.ID] = board.Name
+		cardList = append(cardList, getMatchingCardsFromBoard(board)...)
+	}
+
+	fmt.Printf("boards: %v", boards)
+	return cardList
+
+}
+func checkCardForLabel(cardList []*trello.Card) {
+
+}
+func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
+	cardList := make([]*trello.Card, 0)
+
+	cards, err := board.GetCards(trello.Defaults())
+	if err != nil {
+		log.Fatal("cannot get cards from board")
+	}
+	for _, card := range cards {
+		for _, label := range card.Labels {
+			fmt.Println("label %v on %v", label, card)
+			if label.Name == labelName {
+				cardList = append(cardList, card)
+			}
+		}
+	}
+	return cardList
+}
+
+/* for cardID := range cards {
+					//	fmt.Printf("card %v", cards[card])
+					for labelId := range cards[cardID].IDLabels {
+						// fmt.Printf("label: %v\n", cards[card].IDLabels[labelId])
+						x, _ := client.GetLabel(cards[cardID].IDLabels[labelId], trello.Defaults())
+						cardno++
+						fmt.Printf("card no: %v, label: %v\n", cardno, x.Name)
+
+						//fmt.Printf("label %v\n", labelId)
+					}
+
+				}
+
+			}
+		card.Labels
+
+	}
+
+}
+*/
+
 func main() {
 
-	getLabels()
-	writeLabels()
+	cardList := getLabels()
+	writeLabels(cardList)
+	// todo: writeLabels()
 
-	/*	client := trello.NewClient(trelloAppKey, trelloToken)
+	/*
 
 		board, err := client.GetBoard("5a4cafbaac838c7713a3a7e3", trello.Defaults())
 		if err != nil {
