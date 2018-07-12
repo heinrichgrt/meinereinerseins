@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/adlio/trello"
 	"github.com/boombuler/barcode/qr"
+	"github.com/google/uuid"
 	"github.com/jung-kurt/gofpdf"
 	"github.com/jung-kurt/gofpdf/contrib/barcode"
 	log "github.com/sirupsen/logrus"
@@ -48,6 +50,7 @@ var (
 	printerMedia       = "Custom.62x100mm"
 	printerOrientation = "landscape"
 	printerName        = "Brother_QL_700"
+	tmpDirName         = ""
 )
 
 //Resultset  Json for output
@@ -64,13 +67,16 @@ type Resultset struct {
 }
 
 func startUp() {
-	file, err := ioutil.TempFile("dir", tmpDirPrefix)
+	dir, err := ioutil.TempDir(os.TempDir(), tmpDirPrefix)
 	if err != nil {
 		log.Fatal(err)
 	}
 	//defer os.Remove(file.Name())
-
-	fmt.Println(file.Name())
+	fmt.Println(dir)
+	tmpDirName = dir
+}
+func cleanUp(dirName string) {
+	os.RemoveAll(dirName)
 
 }
 
@@ -132,7 +138,8 @@ func writeLabels(cardList []*trello.Card) []string {
 	pdfFileList := make([]string, 0)
 	for _, card := range cardList {
 		pdf := pdfBaseSetup()
-		extendedPdf := writeLabel(pdf, card)
+		pdfFileName := writeLabel(pdf, card)
+		pdfFileList = append(pdfFileList, pdfFileName)
 	}
 
 	return pdfFileList
@@ -166,9 +173,8 @@ func filterBoards(userBoards []*trello.Board) []*trello.Board {
 	boardList := make([]*trello.Board, 0)
 	for boardID := range userBoards {
 		fmt.Printf("id: %v, board: %v", boardID, userBoards[boardID])
-		x := userBoards[boardID].Name
 		for watchID := range boardsToWatch {
-			if x == boardsToWatch[watchID] {
+			if userBoards[boardID].Name == boardsToWatch[watchID] {
 				boardList = append(boardList, userBoards[boardID])
 			}
 		}
@@ -179,7 +185,7 @@ func filterBoards(userBoards []*trello.Board) []*trello.Board {
 func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 
 	pdf.SetFont(fontFamily, headFontStyle, headFontSize)
-	extended := make([]*trello.Card, 0)
+
 	_, lineHt := pdf.GetFontSize()
 	registerQR(pdf, card)
 	pdf.SetTopMargin(headTopMargin)
@@ -202,14 +208,20 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
-	err := pdf.OutputFileAndClose("/Users/heinrich/card.pdf")
+	fileName := tmpDirName + "/" + getUUID() + ".pdf"
+	err := pdf.OutputFileAndClose(fileName)
 
 	if err != nil {
 		log.Error("cannot create pdf-file %v", err)
 
 	}
-	return "defineThisLater"
-	// add code for the card.
+	return fileName
+}
+
+func getUUID() string {
+	uuid := uuid.New()
+	return uuid.String()
+
 }
 func boarListIDsToNames(board *trello.Board) {
 	lists, _ := board.GetLists(trello.Defaults())
@@ -277,26 +289,26 @@ func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 
 }
 */
-func execCommand(CommandOutPut *Resultset) {
+func (r *Resultset) execCommand() {
 	//func execCommand(extcmd string, args []string) error, string, string{
 
-	cmd := exec.Command(CommandOutPut.OSCommand, CommandOutPut.CommandArgs...)
+	cmd := exec.Command(r.OSCommand, r.CommandArgs...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	CommandOutPut.SuccessfullExecution = true
-	CommandOutPut.CmdStarttime = time.Now()
+	r.SuccessfullExecution = true
+	r.CmdStarttime = time.Now()
 
 	err := cmd.Run()
-	CommandOutPut.Stdout = string(stdout.Bytes())
-	CommandOutPut.Stderr = string(stderr.Bytes())
-	CommandOutPut.CMDStoptime = time.Now()
-	CommandOutPut.DurationSecounds = int(CommandOutPut.CMDStoptime.Unix() - CommandOutPut.CmdStarttime.Unix())
+	r.Stdout = string(stdout.Bytes())
+	r.Stderr = string(stderr.Bytes())
+	r.CMDStoptime = time.Now()
+	r.DurationSecounds = int(r.CMDStoptime.Unix() - r.CmdStarttime.Unix())
 	if err != nil {
 		//log.Fatalf("cmd.Run() failed with %s\n", err)
 		log.Errorln("Command failed %v err: ", err)
-		CommandOutPut.SuccessfullExecution = false
-		CommandOutPut.ErrorStr = err.Error()
+		r.SuccessfullExecution = false
+		r.ErrorStr = err.Error()
 
 	}
 
@@ -310,12 +322,17 @@ func printLabels(pdfList []string) {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
 		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o", printerOrientation, "-d", printerName, pdf}
+		commandResult.execCommand()
+		fmt.Printf("%v", commandResult)
 
 	}
+
 }
 func main() {
-
+	startUp()
+	defer cleanUp(tmpDirName)
 	cardList := getLabels()
 	pdfFileList := writeLabels(cardList)
 	printLabels(pdfFileList)
+
 }
