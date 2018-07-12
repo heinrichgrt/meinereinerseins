@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/adlio/trello"
 	"github.com/boombuler/barcode/qr"
@@ -37,11 +41,42 @@ var (
 	//utility vars
 	boardNameByID = make(map[string]string)
 	listNameByID  = make(map[string]string)
+
+	// system settings
+	tmpDirPrefix = "trelloKnecht"
+	// printer settings
+	printerMedia       = "Custom.62x100mm"
+	printerOrientation = "landscape"
+	printerName        = "Brother_QL_700"
 )
 
-func registerQR(pdf *gofpdf.Fpdf) {
+//Resultset  Json for output
+type Resultset struct {
+	OSCommand            string    `json:"os.cmd"`
+	CommandArgs          []string  `json:"cmd.args"`
+	Stdout               string    `json:"stdout"`
+	Stderr               string    `json:"stderr,omitempty"`
+	CmdStarttime         time.Time `json:"cmd.starttime"`
+	CMDStoptime          time.Time `json:"=md.stoptime"`
+	DurationSecounds     int       `json:"duration.seconds"`
+	SuccessfullExecution bool      `json:"succesful"`
+	ErrorStr             string    `json:"errorstr,omitempty"`
+}
 
-	key := barcode.RegisterQR(pdf, "https://trello.com/c/JJRO2z8y/260-die-containerlinux-updates-finden-zu-einer-geeigneten-zeit-statt", qr.H, qr.Unicode)
+func startUp() {
+	file, err := ioutil.TempFile("dir", tmpDirPrefix)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//defer os.Remove(file.Name())
+
+	fmt.Println(file.Name())
+
+}
+
+func registerQR(pdf *gofpdf.Fpdf, card *trello.Card) {
+
+	key := barcode.RegisterQR(pdf, card.Url, qr.H, qr.Unicode)
 
 	barcode.BarcodeUnscalable(pdf, key, qRCodePos[0], qRCodePos[1], &qRCodeSize, &qRCodeSize, false)
 
@@ -93,14 +128,14 @@ func pdfBaseSetup() *gofpdf.Fpdf {
 	pdf.AddPage()
 	return pdf
 }
-func writeLabels(cardList []*trello.Card) []*gofpdf.Fpdf {
-	pdfList := make([]*gofpdf.Fpdf, 0)
+func writeLabels(cardList []*trello.Card) []string {
+	pdfFileList := make([]string, 0)
 	for _, card := range cardList {
 		pdf := pdfBaseSetup()
-		writeLabel(pdf, card)
-
+		extendedPdf := writeLabel(pdf, card)
 	}
-	return pdfList
+
+	return pdfFileList
 }
 
 func getBoards(client *trello.Client) []*trello.Board {
@@ -141,32 +176,23 @@ func filterBoards(userBoards []*trello.Board) []*trello.Board {
 	}
 	return boardList
 }
-func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) {
+func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 
 	pdf.SetFont(fontFamily, headFontStyle, headFontSize)
+	extended := make([]*trello.Card, 0)
 	_, lineHt := pdf.GetFontSize()
-	registerQR(pdf)
+	registerQR(pdf, card)
 	pdf.SetTopMargin(headTopMargin)
-	xx, yy := pdf.GetXY()
-
 	pdf.Rect(blackRectPos[0], blackRectPos[1], blackRectPos[2], blackRectPos[3], "D")
 	headerString := card.Name
-
-	//columnName := card.Labels
-	columnName := card.IDList
 	htmlString := "<center>" + shortenStringIfToLong(headerString) + "</center>"
-
 	html := pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
-
-	htmlString = "<left>" + boardNameByID[card.IDBoard] + " | " + columnName + "</left>"
-	xx, yy = pdf.GetXY()
-	//fmt.Printf("x %v und y %v", xx, yy)
+	htmlString = "<left>" + boardNameByID[card.IDBoard] + " | " + listNameByID[card.IDList] + "</left>"
 	pdf.SetFont("Times", "I", 8)
 	pdf.SetAutoPageBreak(false, 0.0)
 	_, lineHt = pdf.GetFontSize()
 	lowerpos := lineHt + 6
-
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
@@ -176,35 +202,34 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) {
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
-	fmt.Printf("x %v und y %v ", xx, yy)
-
-	/* pdf.SetFooterFunc(func {
-		pdf.SetY(-15)
-		pdf.SetFont(fontFamily, "I", 8)
-		pdf.CellFormat(0, 10, fmt.Sprintf("Unten auf der Seite"),
-			"", 0, "C", false, 0, "")
-	})
-	*/
-
 	err := pdf.OutputFileAndClose("/Users/heinrich/card.pdf")
+
 	if err != nil {
 		log.Error("cannot create pdf-file %v", err)
 
 	}
-
+	return "defineThisLater"
+	// add code for the card.
 }
 func boarListIDsToNames(board *trello.Board) {
-	list, _ := board.GetLists(trello.Defaults())
-	fmt.Println("%v", list)
+	lists, _ := board.GetLists(trello.Defaults())
+	for _, list := range lists {
+
+		listNameByID[list.ID] = list.Name
+
+	}
+
 }
 func getLabels() []*trello.Card {
 	cardList := make([]*trello.Card, 0)
 	client := trello.NewClient(trelloAppKey, trelloToken)
 	boards := getBoards(client)
+
 	list, _ := client.GetList("5a53520750c9f99b20f6c7b9", trello.Defaults())
 	fmt.Printf("%v", list)
 	// filteredBoards := filterBoards(boards)
 	for _, board := range filterBoards(boards) {
+		boarListIDsToNames(board)
 		boardNameByID[board.ID] = board.Name
 		cardList = append(cardList, getMatchingCardsFromBoard(board)...)
 	}
@@ -213,9 +238,7 @@ func getLabels() []*trello.Card {
 	return cardList
 
 }
-func checkCardForLabel(cardList []*trello.Card) {
 
-}
 func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 	cardList := make([]*trello.Card, 0)
 
@@ -254,62 +277,45 @@ func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 
 }
 */
+func execCommand(CommandOutPut *Resultset) {
+	//func execCommand(extcmd string, args []string) error, string, string{
 
+	cmd := exec.Command(CommandOutPut.OSCommand, CommandOutPut.CommandArgs...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	CommandOutPut.SuccessfullExecution = true
+	CommandOutPut.CmdStarttime = time.Now()
+
+	err := cmd.Run()
+	CommandOutPut.Stdout = string(stdout.Bytes())
+	CommandOutPut.Stderr = string(stderr.Bytes())
+	CommandOutPut.CMDStoptime = time.Now()
+	CommandOutPut.DurationSecounds = int(CommandOutPut.CMDStoptime.Unix() - CommandOutPut.CmdStarttime.Unix())
+	if err != nil {
+		//log.Fatalf("cmd.Run() failed with %s\n", err)
+		log.Errorln("Command failed %v err: ", err)
+		CommandOutPut.SuccessfullExecution = false
+		CommandOutPut.ErrorStr = err.Error()
+
+	}
+
+	//	fmt.Printf("out:\n%s\nerr:\n%s\n", outStr, errStr)
+
+	return
+}
+
+func printLabels(pdfList []string) {
+	for _, pdf := range pdfList {
+		commandResult := new(Resultset)
+		commandResult.OSCommand = "/usr/bin/lp"
+		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o", printerOrientation, "-d", printerName, pdf}
+
+	}
+}
 func main() {
 
 	cardList := getLabels()
-	writeLabels(cardList)
-	// todo: writeLabels()
-
-	/*
-
-		board, err := client.GetBoard("5a4cafbaac838c7713a3a7e3", trello.Defaults())
-		if err != nil {
-			log.Error("cannot get Board: %v", "change")
-		}
-		cardsToPrint := getMarkedCardsByBoard(board)
-
-		for cardID := range cardsToPrint {
-			fmt.Printf("card name %v", cardsToPrint[cardID])
-	*/
-
-	//}
-
-	//
-	/*
-
-		// new FPDF('P','mm',array(100,150));
-		//label, err := client.GetLabel("4eea4ff", Defaults())
-
-		if err != nil {
-			log.Errorf("cann not get board with id:  ")
-		}
-		/*
-			cards, err := board.GetCards(trello.Defaults())
-
-			cardno := 0
-			/* for _, cards := range cards {
-
-				// GetCards makes an API call to /lists/:id/cards using credentials from `client`
-				//cards, err := board.GetCards(trello.Defaults())
-				if err != nil {
-					// Handle error
-				}
-
-				/* for cardID := range cards {
-					//	fmt.Printf("card %v", cards[card])
-					for labelId := range cards[cardID].IDLabels {
-						// fmt.Printf("label: %v\n", cards[card].IDLabels[labelId])
-						x, _ := client.GetLabel(cards[cardID].IDLabels[labelId], trello.Defaults())
-						cardno++
-						fmt.Printf("card no: %v, label: %v\n", cardno, x.Name)
-
-						//fmt.Printf("label %v\n", labelId)
-					}
-
-				}
-
-			}
-			fmt.Printf("baord: %v\n", board)
-	*/
+	pdfFileList := writeLabels(cardList)
+	printLabels(pdfFileList)
 }
