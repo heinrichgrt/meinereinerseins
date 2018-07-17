@@ -31,19 +31,23 @@ var (
 	headFontStyle     = "B"
 	headFontSize      = 14.0
 	headTopMargin     = 5.0
-	blackRectPos      = []float64{2.0, 2.0, 96.0, 58.0}
+	blackRectPos      = []float64{3.0, 2.0, 95.0, 58.0}
 	// trello settings
-	trelloAppKey       = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
-	trelloToken        = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
-	toPrintedLabelName = "PRINTME_NDL"
-	trelloUserName     = "kls_drucker"
-	boardsToWatch      = []string{"DevOps 2020 - Board", "SAP Backlog KLS"}
-	labelName          = "PRINTME_NDL"
+	trelloAppKey        = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
+	trelloToken         = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
+	toPrintedLabelName  = "PRINTME_DEVOPS"
+	newLabelAfterPrint  = "PRINTED"
+	newLabelAfterPrtIDs = make(map[string]string)
+	trelloUserName      = "kls_drucker"
+
+	boardsToWatch = []string{"DevOps 2020 Themen und Ideen"}
 
 	//utility vars
-	boardNameByID = make(map[string]string)
-	listNameByID  = make(map[string]string)
-
+	boardNameByID  = make(map[string]string)
+	listNameByID   = make(map[string]string)
+	labelIDByName  = make(map[string]string)
+	cardByFileName = make(map[string]*trello.Card)
+	printedCards   = make([]string, 0)
 	// system settings
 	tmpDirPrefix = "trelloKnecht"
 	// printer settings
@@ -65,7 +69,19 @@ type Resultset struct {
 	SuccessfullExecution bool      `json:"succesful"`
 	ErrorStr             string    `json:"errorstr,omitempty"`
 }
+type empt struct {
+	name string `json:"ignore"`
+}
 
+// API extensions:
+
+/*
+func deleteLabel(card *trello.Card, labelID string `json:"ignore"`) error {
+	path := fmt.Sprintf("cards/%s", card.ID)
+	return card.client.Delete(path, Arguments{"pos": fmt.Sprintf("%f", newPos)}, c)
+	card.AddIdLabel("PRINTED")
+}
+*/
 func startUp() {
 	dir, err := ioutil.TempDir(os.TempDir(), tmpDirPrefix)
 	if err != nil {
@@ -79,7 +95,59 @@ func cleanUp(dirName string) {
 	os.RemoveAll(dirName)
 
 }
+func getPrintedLabelId(board *trello.Board) {
+	labels, err := board.GetLabels(trello.Defaults())
+	if err != nil {
+		log.Fatal("cannot get labels from board: %v", err)
+	}
+	for _, label := range labels {
+		fmt.Printf("%v", label)
+		if label.Name == newLabelAfterPrint {
+			newLabelAfterPrtIDs[board.ID] = label.ID
+		}
+	}
+}
+func swapLabel(cards []*trello.Card) {
+	//	x := card.Labels
+	//	y := card.IDLabels
+	//_, err := card.AddMemberID("testmemberid")
+	//if err != nil {
+	//	log.Fatalf("add Member: %v\n", err)
+	//
+	for _, card := range cards {
+		r := new(trello.Empt)
+		//var l card.Labels
+		err := card.RemoveIDLabel(labelIDByName[toPrintedLabelName], r)
+		if err != nil {
+			log.Fatalf("removing  Label : %v with %v \n", toPrintedLabelName, err)
+		}
+		err = card.AddIDLabel(newLabelAfterPrtIDs[card.IDBoard])
+		if err != nil {
+			log.Fatalf("adding Label: %v  with %v\n", newLabelAfterPrint, err)
+		}
+	}
+	/* newLabelList := make([]string, 0)
 
+	for _, labelId := range y {
+
+		if labelId != labelIDByName[toPrintedLabelName] {
+
+			//	matchingCards = append(matchingCards, cards[cardID])
+
+			newLabelList = append(newLabelList, labelId)
+		}
+	}
+	//
+	t := make([]*trello.Label, 0)
+	card.Labels = t
+	//
+	card.IDLabels = newLabelList
+	error := card.Update(trello.Defaults())
+
+	log.Info("%v", error)
+	log.Info("%v, %v", x, y)
+	*/
+}
 func registerQR(pdf *gofpdf.Fpdf, card *trello.Card) {
 
 	key := barcode.RegisterQR(pdf, card.Url, qr.H, qr.Unicode)
@@ -89,6 +157,7 @@ func registerQR(pdf *gofpdf.Fpdf, card *trello.Card) {
 	// Output:
 	// Successfully generated ../../pdf/contrib_barcode_RegisterQR.pdf
 }
+
 func shortenStringIfToLong(instring string) string {
 	wordList := strings.Split(instring, " ")
 	shortendString := ""
@@ -106,6 +175,8 @@ func shortenStringIfToLong(instring string) string {
 	}
 	return shortendString
 }
+
+/*
 func getMarkedCardsByBoard(board *trello.Board) []*trello.Card {
 	var matchingCards []*trello.Card
 	cards, err := board.GetCards(trello.Defaults())
@@ -115,16 +186,15 @@ func getMarkedCardsByBoard(board *trello.Board) []*trello.Card {
 	for cardID := range cards {
 		labels := cards[cardID].Labels
 		for labelID := range labels {
-			log.Debug("label: %v", labels[labelID].Name)
-			fmt.Printf("log %v\n", labels[labelID].Name)
+			labelIDByName[labels[labelID].Name] = labels[labelID].ID
 			if labels[labelID].Name == toPrintedLabelName {
-
 				matchingCards = append(matchingCards, cards[cardID])
 			}
 		}
 	}
 	return matchingCards
 }
+*/
 func pdfBaseSetup() *gofpdf.Fpdf {
 	pdf := gofpdf.NewCustom(&gofpdf.InitType{
 		UnitStr: pdfUnitStr,
@@ -209,6 +279,8 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
 	fileName := tmpDirName + "/" + getUUID() + ".pdf"
+	cardByFileName[fileName] = card
+
 	err := pdf.OutputFileAndClose(fileName)
 
 	if err != nil {
@@ -237,11 +309,9 @@ func getLabels() []*trello.Card {
 	client := trello.NewClient(trelloAppKey, trelloToken)
 	boards := getBoards(client)
 
-	list, _ := client.GetList("5a53520750c9f99b20f6c7b9", trello.Defaults())
-	fmt.Printf("%v", list)
-	// filteredBoards := filterBoards(boards)
 	for _, board := range filterBoards(boards) {
 		boarListIDsToNames(board)
+		getPrintedLabelId(board)
 		boardNameByID[board.ID] = board.Name
 		cardList = append(cardList, getMatchingCardsFromBoard(board)...)
 	}
@@ -259,10 +329,12 @@ func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 		log.Fatal("cannot get cards from board")
 	}
 	for _, card := range cards {
+
 		for _, label := range card.Labels {
 			fmt.Println("label %v on %v", label, card)
-			if label.Name == labelName {
+			if label.Name == toPrintedLabelName {
 				cardList = append(cardList, card)
+				labelIDByName[label.Name] = label.ID
 			}
 		}
 	}
@@ -324,6 +396,9 @@ func printLabels(pdfList []string) {
 		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o", printerOrientation, "-d", printerName, pdf}
 		commandResult.execCommand()
 		fmt.Printf("%v", commandResult)
+		if commandResult.SuccessfullExecution == true {
+			printedCards = append(printedCards, pdf)
+		}
 
 	}
 
@@ -334,5 +409,6 @@ func main() {
 	cardList := getLabels()
 	pdfFileList := writeLabels(cardList)
 	printLabels(pdfFileList)
+	swapLabel(cardList)
 
 }
