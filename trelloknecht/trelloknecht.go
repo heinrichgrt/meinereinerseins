@@ -95,6 +95,17 @@ func cleanUp(dirName string) {
 	os.RemoveAll(dirName)
 
 }
+func isPrintedLabelOnBoard(card *trello.Card) bool {
+	res := true
+	for _, label := range card.Labels {
+		if label.Name == newLabelAfterPrint {
+			res = false
+		}
+
+	}
+	return res
+}
+
 func getPrintedLabelId(board *trello.Board) {
 	labels, err := board.GetLabels(trello.Defaults())
 	if err != nil {
@@ -115,15 +126,17 @@ func swapLabel(cards []*trello.Card) {
 	//	log.Fatalf("add Member: %v\n", err)
 	//
 	for _, card := range cards {
-		r := new(trello.Empt)
+		r := new(trello.Label)
 		//var l card.Labels
 		err := card.RemoveIDLabel(labelIDByName[toPrintedLabelName], r)
 		if err != nil {
 			log.Fatalf("removing  Label : %v with %v \n", toPrintedLabelName, err)
 		}
-		err = card.AddIDLabel(newLabelAfterPrtIDs[card.IDBoard])
-		if err != nil {
-			log.Fatalf("adding Label: %v  with %v\n", newLabelAfterPrint, err)
+		if isPrintedLabelOnBoard(card) {
+			err = card.AddIDLabel(newLabelAfterPrtIDs[card.IDBoard])
+			if err != nil {
+				log.Fatalf("adding Label: %v  with %v\n", newLabelAfterPrint, err)
+			}
 		}
 	}
 	/* newLabelList := make([]string, 0)
