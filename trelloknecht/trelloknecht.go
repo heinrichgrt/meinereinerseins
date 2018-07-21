@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,7 @@ var (
 	printerOrientation = "landscape"
 	printerName        = "Brother_QL_700"
 	tmpDirName         = ""
+	numberOfCopiesPrnt = 2
 )
 
 //Resultset  Json for output
@@ -406,7 +408,8 @@ func printLabels(pdfList []string) {
 	for _, pdf := range pdfList {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
-		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o", printerOrientation, "-d", printerName, pdf}
+		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o",
+			printerOrientation, "-n", strconv.Itoa(numberOfCopiesPrnt), "-d", printerName, pdf}
 		commandResult.execCommand()
 		fmt.Printf("%v", commandResult)
 		if commandResult.SuccessfullExecution == true {
