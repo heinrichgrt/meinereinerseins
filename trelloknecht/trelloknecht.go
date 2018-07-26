@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/adlio/trello"
 	"github.com/boombuler/barcode/qr"
+	"github.com/coreos/etcd/client"
 	"github.com/google/uuid"
 	"github.com/jung-kurt/gofpdf"
 	"github.com/jung-kurt/gofpdf/contrib/barcode"
@@ -21,34 +23,47 @@ import (
 
 var (
 	// pdf setings
-	fontFamily        = "Helvetica"
-	pdfUnitStr        = "mm"
-	pdfDocDimension   = []float64{100.0, 62.0}
-	pdfMargins        = []float64{3.0, 3.0, 3.0}
+	fontFamily = "Helvetica"
+	pdfUnitStr = "mm"
+	pdfDocXLen = 100.0
+	pdfDocYLen = 62.0
+	pdfMargin  = 3.0
+
 	headLineCharsSkip = 82
 	headLineMaxChars  = 92
 	qRCodeSize        = 30.0
-	qRCodePos         = []float64{68.0, 25.0}
+	qRCodePosX        = 68.0
+	qRCodePosY        = 25.0
 	headFontStyle     = "B"
 	headFontSize      = 14.0
 	headTopMargin     = 5.0
-	blackRectPos      = []float64{3.0, 2.0, 95.0, 58.0}
+	rectX0            = 3.0
+	rectY0            = 2.0
+	rectX1            = 95.0
+	rectY1            = 58.0
+
 	// trello settings
-	trelloAppKey        = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
-	trelloToken         = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
-	toPrintedLabelName  = "PRINTME_DEVOPS"
-	newLabelAfterPrint  = "PRINTED"
-	newLabelAfterPrtIDs = make(map[string]string)
-	trelloUserName      = "kls_drucker"
+	trelloAppKey       = "ad085a9f4dd5cf2d2b558ae45c4ad1f7"
+	trelloToken        = "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b"
+	toPrintedLabelName = "PRINTME_DEVOPS"
+	newLabelAfterPrint = "PRINTED"
+
+	trelloUserName = "kls_drucker"
 
 	boardsToWatch = []string{"DevOps 2020 Themen und Ideen"}
 
 	//utility vars
-	boardNameByID  = make(map[string]string)
-	listNameByID   = make(map[string]string)
-	labelIDByName  = make(map[string]string)
-	cardByFileName = make(map[string]*trello.Card)
-	printedCards   = make([]string, 0)
+	newLabelAfterPrtIDs = make(map[string]string)
+	boardNameByID       = make(map[string]string)
+	listNameByID        = make(map[string]string)
+	labelIDByName       = make(map[string]string)
+	cardByFileName      = make(map[string]*trello.Card)
+	printedCards        = make([]string, 0)
+	// composed vars
+	pdfDocDimension = []float64{pdfDocXLen, pdfDocYLen}
+	pdfMargins      = []float64{pdfMargin, pdfMargin, pdfMargin}
+	qRCodePos       = []float64{qRCodePosX, qRCodePosY}
+	blackRectPos    = []float64{rectX0, rectY0, rectX1, rectY1}
 	// system settings
 	tmpDirPrefix = "trelloKnecht"
 	// printer settings
@@ -84,7 +99,60 @@ func deleteLabel(card *trello.Card, labelID string `json:"ignore"`) error {
 	card.AddIdLabel("PRINTED")
 }
 */
-func startUp() {
+func checkCommandLineArgs() bool {
+	argsWithProg := os.Args
+	networked := false
+	if len(argsWithProg) > 1 && argsWithProg[1] == "-n" {
+		networked = true
+	}
+	return networked
+}
+func fetchIP() string {
+	localIPAddr := GetOutboundIP()
+	fmt.Println("%v", localIPAddr)
+	return localIPAddr.String()
+
+}
+func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
+	kapi.Set(weitermachen)
+
+}
+func setUpEtcdConnection() client.KeysAPI {
+	cfg := client.Config{
+		Endpoints: []string{"http://127.0.0.1:2379"},
+		Transport: client.DefaultTransport,
+		// set timeout per request to fail fast when the target endpoint is unavailable
+		HeaderTimeoutPerRequest: time.Second,
+	}
+	c, err := client.New(cfg)
+	if err != nil {
+		log.Fatal(err)
+
+	}
+	kapi := client.NewKeysAPI(c)
+	/*
+		 set "/foo" key with "bar" value
+		log.Print("Setting '/foo' key with 'bar' value")
+		resp, err := kapi.Set(context.Background(), "/foo", "bar", nil)
+		//client.New(cfg)
+		if err != nil {
+			log.Fatal(err)
+		} else {
+			// print common key info
+			log.Printf("Set is done. Metadata is %q\n", resp)
+		}
+	*/
+	return kapi
+}
+func init() {
+	networked := checkCommandLineArgs()
+	if networked {
+		ip := fetchIP()
+		kapi := setUpEtcdConnection()
+		log.Error("%v, %v", ip, kapi)
+
+	}
+
 	dir, err := ioutil.TempDir(os.TempDir(), tmpDirPrefix)
 	if err != nil {
 		log.Fatal(err)
@@ -107,7 +175,17 @@ func isPrintedLabelOnBoard(card *trello.Card) bool {
 	}
 	return res
 }
+func GetOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
 
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
+}
 func getPrintedLabelId(board *trello.Board) {
 	labels, err := board.GetLabels(trello.Defaults())
 	if err != nil {
@@ -356,26 +434,6 @@ func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 	return cardList
 }
 
-/* for cardID := range cards {
-					//	fmt.Printf("card %v", cards[card])
-					for labelId := range cards[cardID].IDLabels {
-						// fmt.Printf("label: %v\n", cards[card].IDLabels[labelId])
-						x, _ := client.GetLabel(cards[cardID].IDLabels[labelId], trello.Defaults())
-						cardno++
-						fmt.Printf("card no: %v, label: %v\n", cardno, x.Name)
-
-						//fmt.Printf("label %v\n", labelId)
-					}
-
-				}
-
-			}
-		card.Labels
-
-	}
-
-}
-*/
 func (r *Resultset) execCommand() {
 	//func execCommand(extcmd string, args []string) error, string, string{
 
@@ -419,8 +477,8 @@ func printLabels(pdfList []string) {
 	}
 
 }
+
 func main() {
-	startUp()
 	defer cleanUp(tmpDirName)
 	cardList := getLabels()
 	pdfFileList := writeLabels(cardList)
