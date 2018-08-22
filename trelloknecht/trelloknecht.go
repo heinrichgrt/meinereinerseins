@@ -183,9 +183,7 @@ func putOwnIPtoEtcd(kapi client.KeysAPI, name string, ip string) {
 
 }
 func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
-	//resp, err := kapi.Get(context.Background(), "/trelloprinter/config/default", &client.GetOptions{Recursive: true})
-	// todo change this back
-	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/test01", &client.GetOptions{Recursive: true})
+	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/default", &client.GetOptions{Recursive: true})
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -194,8 +192,19 @@ func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
 			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
 			configuration[removePathFromKey(n.Key)] = n.Value
 		}
-		//	log.Printf("Get is done. Metadata is %q\n", resp)
-		//	log.Printf("%q key has %q value\n", resp.Node.Key, resp.Node.Value)
+	}
+}
+
+func fetchOwnConfigurationFromEtcd(kapi client.KeysAPI, printerName string) {
+	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/"+printerName, &client.GetOptions{Recursive: true})
+	if err != nil {
+		log.Fatal(err)
+	} else {
+
+		for _, n := range resp.Node.Nodes {
+			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
+			configuration[removePathFromKey(n.Key)] = n.Value
+		}
 	}
 
 }
@@ -239,6 +248,7 @@ func init() {
 		ip := fetchIP()
 		kapi := setUpEtcdConnection()
 		fetchDefaultConfigFromEtcd(kapi)
+		fetchOwnConfigurationFromEtcd(kapi, printername)
 		putOwnIPtoEtcd(kapi, printername, ip)
 		fetchBoardListFromConfig()
 		log.Error("%v, %v", ip, kapi)
