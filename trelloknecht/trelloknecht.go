@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -53,7 +54,13 @@ var (
 
 		"trelloUserName": "kls_drucker",
 
-		"boardsToWatch": `["DevOps 2020 Themen und Ideen","DevOpsArchiv"]`,
+		"boardsToWatch":      `["DevOps 2020 Themen und Ideen","DevOpsArchiv"]`,
+		"printerMedia":       "Custom.62x100mm",
+		"printerOrientation": "landscape",
+		"printerName":        "Brother_QL_700",
+		"tmpDirName":         "",
+		"tmpDirPrefix":       "trelloKnecht",
+		"numberOfCopiesPrnt": "2",
 	}
 	//utility vars
 
@@ -72,12 +79,7 @@ var (
 	boardsToWatch   = []string{}
 
 	// printer settings
-	printerMedia       = "Custom.62x100mm"
-	printerOrientation = "landscape"
-	printerName        = "Brother_QL_700"
-	tmpDirName         = ""
-	numberOfCopiesPrnt = 2
-	tmpDirPrefix       = "trelloKnecht"
+
 )
 
 //Resultset  Json for output
@@ -139,13 +141,21 @@ func getBlackRectPosFromString() []float64 {
 	return r
 }
 
-func checkCommandLineArgs() bool {
-	argsWithProg := os.Args
-	networked := false
-	if len(argsWithProg) > 1 && argsWithProg[1] == "-n" {
-		networked = true
-	}
-	return networked
+func checkCommandLineArgs() (bool, string) {
+
+	networked := flag.Bool("networked", false, "get remote config")
+	netname := flag.String("netname", "chars", "Metric {chars|words|lines};.")
+	//fmt.Printf("name %v\n", *netname)
+	//fmt.Printf("net %v\n", *networked)
+	//fmt.Printf("word %v\n", *wordPtr)
+
+	flag.Parse()
+	//fmt.Println("net %v", *networked)
+	//log.Fatalf("netname: %v and networked: %v\n", *netname, *networked)
+	// TODO the debugger does this wrong
+	*networked = true
+	*netname = "demoprinter"
+	return *networked, *netname
 }
 func fetchIP() string {
 	localIPAddr := GetOutboundIP()
@@ -162,18 +172,39 @@ func fetchConfiguration() {
 	fetchBoardListFromConfig()
 
 }
-func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
-	resp, err := kapi.Get(context.Background(), "/trelloprinter/defaults", &client.GetOptions{Recursive: true})
+func putOwnIPtoEtcd(kapi client.KeysAPI, name string, ip string) {
+	resp, err := kapi.Set(context.Background(), "/trelloprinter/IPs/"+name, ip, nil)
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		for _, n := range resp.Node.Nodes {
-			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
-		}
-		log.Printf("Get is done. Metadata is %q\n", resp)
-		log.Printf("%q key has %q value\n", resp.Node.Key, resp.Node.Value)
+		// print common key info
+		log.Printf("Set is done. Metadata is %q\n", resp)
 	}
 
+}
+func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
+	//resp, err := kapi.Get(context.Background(), "/trelloprinter/config/default", &client.GetOptions{Recursive: true})
+	// todo change this back
+	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/test01", &client.GetOptions{Recursive: true})
+	if err != nil {
+		log.Fatal(err)
+	} else {
+
+		for _, n := range resp.Node.Nodes {
+			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
+			configuration[removePathFromKey(n.Key)] = n.Value
+		}
+		//	log.Printf("Get is done. Metadata is %q\n", resp)
+		//	log.Printf("%q key has %q value\n", resp.Node.Key, resp.Node.Value)
+	}
+
+}
+func removePathFromKey(k string) string {
+	// there must be a better way...
+	//s := regexp.MustCompile("/").Split(k, 5)
+	s := strings.Split(k, "/")
+
+	return s[len(s)-1]
 }
 func fetchBoardListFromConfig() {
 	// try this.
@@ -199,25 +230,29 @@ func setUpEtcdConnection() client.KeysAPI {
 	return kapi
 }
 func init() {
-	networked := checkCommandLineArgs()
+
+	// continue here with flag...
+	networked, printername := checkCommandLineArgs()
 	fetchConfiguration()
 
 	if networked {
 		ip := fetchIP()
 		kapi := setUpEtcdConnection()
 		fetchDefaultConfigFromEtcd(kapi)
+		putOwnIPtoEtcd(kapi, printername, ip)
 		fetchBoardListFromConfig()
 		log.Error("%v, %v", ip, kapi)
 
+		// write IP to etcd
 	}
 
-	dir, err := ioutil.TempDir(os.TempDir(), tmpDirPrefix)
+	dir, err := ioutil.TempDir(os.TempDir(), configuration["tmpDirPrefix"])
 	if err != nil {
 		log.Fatal(err)
 	}
 	//defer os.Remove(file.Name())
 	fmt.Println(dir)
-	tmpDirName = dir
+	configuration["tmpDirName"] = dir
 }
 func cleanUp(dirName string) {
 	os.RemoveAll(dirName)
@@ -398,7 +433,7 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
-	fileName := tmpDirName + "/" + getUUID() + ".pdf"
+	fileName := configuration["tmpDirName"] + "/" + getUUID() + ".pdf"
 	cardByFileName[fileName] = card
 
 	err := pdf.OutputFileAndClose(fileName)
@@ -486,8 +521,8 @@ func printLabels(pdfList []string) {
 	for _, pdf := range pdfList {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
-		commandResult.CommandArgs = []string{"-o", "media=" + printerMedia, "-o",
-			printerOrientation, "-n", strconv.Itoa(numberOfCopiesPrnt), "-d", printerName, pdf}
+		commandResult.CommandArgs = []string{"-o", "media=" + configuration["printerMedia"], "-o",
+			configuration["printerOrientatio"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
 		commandResult.execCommand()
 		if commandResult.SuccessfullExecution == true {
 			printedCards = append(printedCards, pdf)
@@ -498,7 +533,7 @@ func printLabels(pdfList []string) {
 }
 
 func main() {
-	defer cleanUp(tmpDirName)
+	defer cleanUp(configuration["tmpDirName"])
 	cardList := getLabels()
 	pdfFileList := writeLabels(cardList)
 	printLabels(pdfFileList)
