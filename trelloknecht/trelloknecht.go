@@ -3,9 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -54,7 +52,7 @@ var (
 
 		"trelloUserName": "kls_drucker",
 
-		"boardsToWatch":      `["DevOps 2020 Themen und Ideen","DevOpsArchiv"]`,
+		"boardsToWatch":      "",
 		"printerMedia":       "Custom.62x100mm",
 		"printerOrientation": "landscape",
 		"printerName":        "Brother_QL_700",
@@ -145,13 +143,12 @@ func checkCommandLineArgs() (bool, string) {
 
 	networked := flag.Bool("networked", false, "get remote config")
 	netname := flag.String("netname", "chars", "Metric {chars|words|lines};.")
-	//fmt.Printf("name %v\n", *netname)
-	//fmt.Printf("net %v\n", *networked)
-	//fmt.Printf("word %v\n", *wordPtr)
-
+	debugset := flag.Bool("debug", false, "turn the noise on")
 	flag.Parse()
-	//fmt.Println("net %v", *networked)
-	//log.Fatalf("netname: %v and networked: %v\n", *netname, *networked)
+	if *debugset {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	// TODO the debugger does this wrong
 	*networked = true
 	*netname = "demoprinter"
@@ -159,7 +156,7 @@ func checkCommandLineArgs() (bool, string) {
 }
 func fetchIP() string {
 	localIPAddr := GetOutboundIP()
-	fmt.Println("%v", localIPAddr)
+	log.Debugf("%v", localIPAddr)
 	return localIPAddr.String()
 
 }
@@ -178,7 +175,7 @@ func putOwnIPtoEtcd(kapi client.KeysAPI, name string, ip string) {
 		log.Fatal(err)
 	} else {
 		// print common key info
-		log.Printf("Set is done. Metadata is %q\n", resp)
+		log.Debugf("Set is done. Metadata is %q\n", resp)
 	}
 
 }
@@ -189,7 +186,7 @@ func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
 	} else {
 
 		for _, n := range resp.Node.Nodes {
-			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
+			log.Debugf("Key: %q, Value: %q\n", n.Key, n.Value)
 			configuration[removePathFromKey(n.Key)] = n.Value
 		}
 	}
@@ -202,7 +199,7 @@ func fetchOwnConfigurationFromEtcd(kapi client.KeysAPI, printerName string) {
 	} else {
 
 		for _, n := range resp.Node.Nodes {
-			fmt.Printf("Key: %q, Value: %q\n", n.Key, n.Value)
+			log.Debugf("Key: %q, Value: %q\n", n.Key, n.Value)
 			configuration[removePathFromKey(n.Key)] = n.Value
 		}
 	}
@@ -217,11 +214,8 @@ func removePathFromKey(k string) string {
 }
 func fetchBoardListFromConfig() {
 	// try this.
-
-	err := json.Unmarshal([]byte(configuration["boardsToWatch"]), &boardsToWatch)
-	if err != nil {
-		log.Fatal("cannot decode %v", configuration["boardsToWatch"])
-	}
+	boardsToWatch = strings.Split(configuration["boardsToWatch"], ",")
+	log.Debugf("board list: %v", boardsToWatch)
 }
 func setUpEtcdConnection() client.KeysAPI {
 	cfg := client.Config{
@@ -261,7 +255,7 @@ func init() {
 		log.Fatal(err)
 	}
 	//defer os.Remove(file.Name())
-	fmt.Println(dir)
+	log.Debugf(dir)
 	configuration["tmpDirName"] = dir
 }
 func cleanUp(dirName string) {
@@ -494,7 +488,7 @@ func getMatchingCardsFromBoard(board *trello.Board) []*trello.Card {
 	for _, card := range cards {
 
 		for _, label := range card.Labels {
-			fmt.Println("label %v on %v", label, card)
+			log.Debugf("label %v on %v", label, card)
 			if label.Name == configuration["toPrintedLabelName"] {
 				cardList = append(cardList, card)
 				labelIDByName[label.Name] = label.ID
