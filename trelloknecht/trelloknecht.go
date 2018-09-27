@@ -33,11 +33,12 @@ var (
 
 		"headLineCharsSkip": "82",
 		"headLineMaxChars":  "92",
+		"printQrCode":       "true",
 		"qRCodeSize":        "30.0",
-		"qRCodePosX":        "68.0",
+		"qRCodePosX":        "66.0",
 		"qRCodePosY":        "25.0",
 		"headFontStyle":     "B",
-		"headFontSize":      "14.0",
+		"headFontSize":      "16.0",
 		"headTopMargin":     "5.0",
 		"rectX0":            "3.0",
 		"rectY0":            "2.0",
@@ -52,7 +53,7 @@ var (
 
 		"trelloUserName": "kls_drucker",
 
-		"boardsToWatch":      "",
+		"boardsToWatch":      "DevOps 2020 - Board",
 		"printerMedia":       "Custom.62x100mm",
 		"printerOrientation": "landscape",
 		"printerName":        "Brother_QL_700",
@@ -75,6 +76,7 @@ var (
 	qRCodePos       = []float64{}
 	blackRectPos    = []float64{}
 	boardsToWatch   = []string{}
+	configFile      = ""
 
 	// printer settings
 
@@ -144,14 +146,23 @@ func checkCommandLineArgs() (bool, string) {
 	networked := flag.Bool("networked", false, "get remote config")
 	netname := flag.String("netname", "chars", "Metric {chars|words|lines};.")
 	debugset := flag.Bool("debug", false, "turn the noise on")
+	//configuration["boardsToWatch"] = *flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
+	boards := flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
+	label := flag.String("label", "", "Label to look for")
 	flag.Parse()
 	if *debugset {
 		log.SetLevel(log.DebugLevel)
 	}
-
+	if *label != "" {
+		configuration["toPrintedLabelName"] = *label
+	}
+	if *boards != "" {
+		configuration["boardsToWatch"] = *boards
+	}
 	// TODO the debugger does this wrong
-	*networked = true
-	*netname = "demoprinter"
+	//*networked = true
+	//*netname = "demoprinter"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
 	return *networked, *netname
 }
 func fetchIP() string {
@@ -161,6 +172,29 @@ func fetchIP() string {
 
 }
 
+/*
+func readConfigFromFile(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+		a := strings.Split(string(scanner.Text()),"=")
+		// remove
+		fmt.Println("%v", a)
+
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+}
+*/
 func fetchConfiguration() {
 	pdfDocDimension = getPdfDocDimensionFromString()
 	pdfMargins = getPdfMarginsFromString()
@@ -420,7 +454,7 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	pdf.SetTopMargin(headTopMargin)
 	pdf.Rect(blackRectPos[0], blackRectPos[1], blackRectPos[2], blackRectPos[3], "D")
 	headerString := card.Name
-	htmlString := "<center>" + shortenStringIfToLong(headerString) + "</center>"
+	htmlString := "<center><bold>" + shortenStringIfToLong(headerString) + "</bold></center>"
 	html := pdf.HTMLBasicNew()
 	html.Write(lineHt, htmlString)
 	htmlString = "<left>" + boardNameByID[card.IDBoard] + " | " + listNameByID[card.IDList] + "</left>"
@@ -538,9 +572,12 @@ func printLabels(pdfList []string) {
 
 func main() {
 	defer cleanUp(configuration["tmpDirName"])
-	cardList := getLabels()
-	pdfFileList := writeLabels(cardList)
-	printLabels(pdfFileList)
-	swapLabel(cardList)
+	for {
+		cardList := getLabels()
+		pdfFileList := writeLabels(cardList)
+		printLabels(pdfFileList)
+		swapLabel(cardList)
+		time.Sleep(60 * time.Second)
+	}
 
 }
