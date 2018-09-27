@@ -46,8 +46,8 @@ var (
 		"rectY1":            "58.0",
 
 		// trello settings
-		"trelloAppKey":       "ad085a9f4dd5cf2d2b558ae45c4ad1f7",
-		"trelloToken":        "85e7088cab14a12dee800f262dc15ea6a416157ec2ed1ffe5898234550c9b01b",
+		"trelloAppKey":       "",
+		"trelloToken":        "",
 		"toPrintedLabelName": "PRINTME_DEVOPS",
 		"newLabelAfterPrint": "PRINTED",
 
