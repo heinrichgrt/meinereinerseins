@@ -375,7 +375,6 @@ func shortenStringIfToLong(instring string) string {
 	}
 	for len(shortendString) < headLineLength && iterator < len(wordList) {
 		if len(shortendString)+len(wordList[iterator]) > headLineMaxChars {
-			shortendString += "-bla bla"
 			break
 		}
 		shortendString += " " + wordList[iterator]
@@ -447,6 +446,7 @@ func filterBoards(userBoards []*trello.Board) []*trello.Board {
 func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	headFontSize, _ := strconv.ParseFloat(configuration["headFontSize"], 64)
 	pdf.SetFont(configuration["fontFamily"], configuration["headFontStyle"], headFontSize)
+	tr := pdf.UnicodeTranslatorFromDescriptor("")
 
 	_, lineHt := pdf.GetFontSize()
 	registerQR(pdf, card)
@@ -456,7 +456,7 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	headerString := card.Name
 	htmlString := "<center><bold>" + shortenStringIfToLong(headerString) + "</bold></center>"
 	html := pdf.HTMLBasicNew()
-	html.Write(lineHt, htmlString)
+	html.Write(lineHt, tr(htmlString))
 	htmlString = "<left>" + boardNameByID[card.IDBoard] + " | " + listNameByID[card.IDList] + "</left>"
 	pdf.SetFont("Times", "I", 8)
 	pdf.SetAutoPageBreak(false, 0.0)
@@ -464,13 +464,13 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	lowerpos := lineHt + 6
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
-	html.Write(lineHt, htmlString)
+	html.Write(lineHt, tr(htmlString))
 	lowerx := pdf.GetX()
 	htmlString = "<right>" + joinedLabel(card) + "</right>"
 	pdf.SetX(lowerx + 1)
 	pdf.SetY(-lowerpos)
 	html = pdf.HTMLBasicNew()
-	html.Write(lineHt, htmlString)
+	html.Write(lineHt, tr(htmlString))
 	fileName := configuration["tmpDirName"] + "/" + getUUID() + ".pdf"
 	cardByFileName[fileName] = card
 
