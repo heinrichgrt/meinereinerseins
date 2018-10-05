@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -77,6 +79,7 @@ var (
 	blackRectPos    = []float64{}
 	boardsToWatch   = []string{}
 	configFile      = ""
+	tokenFile       = ""
 
 	// printer settings
 
@@ -149,6 +152,8 @@ func checkCommandLineArgs() (bool, string) {
 	//configuration["boardsToWatch"] = *flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
 	boards := flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
 	label := flag.String("label", "", "Label to look for")
+	config := flag.String("configfile", "", "Path to configuration file")
+	token := flag.String("tokenfile", "", "Path to API token and key file")
 	flag.Parse()
 	if *debugset {
 		log.SetLevel(log.DebugLevel)
@@ -159,10 +164,17 @@ func checkCommandLineArgs() (bool, string) {
 	if *boards != "" {
 		configuration["boardsToWatch"] = *boards
 	}
+	if *config != "" {
+		configFile = *config
+	}
+	if *token != "" {
+		tokenFile = *token
+	}
 	// TODO the debugger does this wrong
 	//*networked = true
 	//*netname = "demoprinter"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
+	tokenFile = ".token"
+	configFile = "config.cfg"
 	return *networked, *netname
 }
 func fetchIP() string {
@@ -172,30 +184,9 @@ func fetchIP() string {
 
 }
 
-/*
-func readConfigFromFile(filename string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		fmt.Println(scanner.Text())
-		a := strings.Split(string(scanner.Text()),"=")
-		// remove
-		fmt.Println("%v", a)
-
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-}
-*/
 func fetchConfiguration() {
+	readConfigFromFile(configFile)
+	readConfigFromFile(tokenFile)
 	pdfDocDimension = getPdfDocDimensionFromString()
 	pdfMargins = getPdfMarginsFromString()
 	qRCodePos = getqRCodePosFromString()
@@ -266,6 +257,30 @@ func setUpEtcdConnection() client.KeysAPI {
 
 	return kapi
 }
+
+func readConfigFromFile(filename string) {
+	if filename == "" {
+		return
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+
+		a := strings.Split(string(scanner.Text()), "=")
+		_, ok := configuration[a[0]]
+		if a[0] != "" && ok {
+			configuration[strings.Trim(a[0], " ")] = strings.Trim(a[1], " ")
+		}
+
+	}
+
+}
+
 func init() {
 
 	// continue here with flag...
