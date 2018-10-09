@@ -174,8 +174,10 @@ func checkCommandLineArgs() (bool, string) {
 	// TODO the debugger does this wrong
 	//*networked = true
 	//*netname = "demoprinter"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-	tokenFile = ".token"
+	/* I need this for debugging...
+ 	tokenFile = ".token"
 	configFile = "config.cfg"
+	*/
 	return *networked, *netname
 }
 func fetchIP() string {
