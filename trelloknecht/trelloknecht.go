@@ -55,13 +55,14 @@ var (
 
 		"trelloUserName": "kls_drucker",
 
-		"boardsToWatch":      "DevOps 2020 - Board",
-		"printerMedia":       "Custom.62x100mm",
-		"printerOrientation": "landscape",
-		"printerName":        "Brother_QL_700",
-		"tmpDirName":         "",
-		"tmpDirPrefix":       "trelloKnecht",
-		"numberOfCopiesPrnt": "2",
+		"boardsToWatch":       "DevOps 2020 - Board",
+		"printerMedia":        "Custom.62x100mm",
+		"printerOrientation":  "landscape",
+		"printerName":         "Brother_QL_700",
+		"tmpDirName":          "",
+		"tmpDirPrefix":        "trelloKnecht",
+		"numberOfCopiesPrnt":  "2",
+		"waitIntervalSeconds": "60",
 	}
 	//utility vars
 
@@ -585,13 +586,27 @@ func printLabels(pdfList []string) {
 
 }
 
+func reportPrints() {
+	for _, pdf := range printedCards {
+		log.Infof("printed card %v", cardByFileName[pdf].Name)
+	}
+
+}
+func sweepOut() {
+	cardByFileName = nil
+	printedCards = nil
+
+}
 func main() {
 	defer cleanUp(configuration["tmpDirName"])
+	//sleeptime, err := strconv.ad(configuration["waitIntervalSeconds"])
 	for {
 		cardList := getLabels()
 		pdfFileList := writeLabels(cardList)
 		printLabels(pdfFileList)
 		swapLabel(cardList)
+		reportPrints()
+		sweepOut()
 		time.Sleep(60 * time.Second)
 	}
 
