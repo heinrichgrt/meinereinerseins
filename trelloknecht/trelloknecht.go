@@ -99,7 +99,7 @@ type Resultset struct {
 	ErrorStr             string    `json:"errorstr,omitempty"`
 }
 
-func getPdfDocDimensionFromString() []float64 {
+getPdfDocDimensionFromString() []float64 {
 	r := make([]float64, 0)
 
 	v, _ := strconv.ParseFloat(configuration["pdfDocXLen"], 64)
@@ -467,7 +467,9 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 
 	_, lineHt := pdf.GetFontSize()
-	registerQR(pdf, card)
+	if configuration["printQrCode"] {
+	  registerQR(pdf, card)
+	}
 	headTopMargin, _ := strconv.ParseFloat(configuration["headTopMargin"], 64)
 	pdf.SetTopMargin(headTopMargin)
 	pdf.Rect(blackRectPos[0], blackRectPos[1], blackRectPos[2], blackRectPos[3], "D")
