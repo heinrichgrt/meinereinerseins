@@ -175,8 +175,8 @@ func checkCommandLineArgs() (bool, string) {
 	//*networked = true
 	//*netname = "demoprinter"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 	/* I need this for debugging...
- 	tokenFile = ".token"
-	configFile = "config.cfg"
+	 	tokenFile = ".token"
+		configFile = "config.cfg"
 	*/
 	return *networked, *netname
 }
@@ -413,6 +413,7 @@ func pdfBaseSetup() *gofpdf.Fpdf {
 	pdf.AddPage()
 	return pdf
 }
+
 func writeLabels(cardList []*trello.Card) []string {
 	pdfFileList := make([]string, 0)
 	for _, card := range cardList {
@@ -436,6 +437,7 @@ func getBoards(client *trello.Client) []*trello.Board {
 	}
 	return boards
 }
+
 func joinedLabel(card *trello.Card) string {
 	labelString := ""
 	labelList := make([]string, 0)
@@ -467,7 +469,12 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 
 	_, lineHt := pdf.GetFontSize()
-	registerQR(pdf, card)
+
+	// The option printQrCode is true by default, but can be set to false
+	// via the config file.
+	if configuration["printQrCode"] == "true" {
+		registerQR(pdf, card)
+	}
 	headTopMargin, _ := strconv.ParseFloat(configuration["headTopMargin"], 64)
 	pdf.SetTopMargin(headTopMargin)
 	pdf.Rect(blackRectPos[0], blackRectPos[1], blackRectPos[2], blackRectPos[3], "D")
@@ -578,7 +585,7 @@ func printLabels(pdfList []string) {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
 		commandResult.CommandArgs = []string{"-o", "media=" + configuration["printerMedia"], "-o",
-			configuration["printerOrientatio"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
+			configuration["printerOrientation"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
 		commandResult.execCommand()
 		if commandResult.SuccessfullExecution == true {
 			printedCards = append(printedCards, pdf)
