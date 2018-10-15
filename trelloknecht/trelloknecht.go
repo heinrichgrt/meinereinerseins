@@ -585,7 +585,7 @@ func printLabels(pdfList []string) {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
 		commandResult.CommandArgs = []string{"-o", "media=" + configuration["printerMedia"], "-o",
-			configuration["printerOrientatio"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
+			configuration["printerOrientation"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
 		commandResult.execCommand()
 		if commandResult.SuccessfullExecution == true {
 			printedCards = append(printedCards, pdf)
