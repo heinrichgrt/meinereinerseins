@@ -34,18 +34,18 @@ var (
 		"pdfMargin":  "3.0",
 
 		"headLineCharsSkip": "82",
-		"headLineMaxChars":  "92",
-		"printQrCode":       "true",
-		"qRCodeSize":        "30.0",
-		"qRCodePosX":        "66.0",
-		"qRCodePosY":        "25.0",
-		"headFontStyle":     "B",
-		"headFontSize":      "16.0",
-		"headTopMargin":     "5.0",
-		"rectX0":            "3.0",
-		"rectY0":            "2.0",
-		"rectX1":            "95.0",
-		"rectY1":            "58.0",
+
+		"printQrCode":   "true",
+		"qRCodeSize":    "30.0",
+		"qRCodePosX":    "66.0",
+		"qRCodePosY":    "25.0",
+		"headFontStyle": "B",
+		"headFontSize":  "16.0",
+		"headTopMargin": "5.0",
+		"rectX0":        "3.0",
+		"rectY0":        "2.0",
+		"rectX1":        "95.0",
+		"rectY1":        "58.0",
 
 		// trello settings
 		"trelloAppKey":       "",
@@ -174,14 +174,14 @@ func checkCommandLineArgs() (bool, string) {
 	// TODO the debugger does this wrong
 	//*networked = true
 	//*netname = "demoprinter"\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-	/* I need this for debugging...
-	 	tokenFile = ".token"
-		configFile = "config.cfg"
-	*/
+	// I need this for debugging...
+	tokenFile = ".token"
+	configFile = "config.cfg"
+
 	return *networked, *netname
 }
 func fetchIP() string {
-	localIPAddr := GetOutboundIP()
+	localIPAddr := getOutboundIP()
 	log.Debugf("%v", localIPAddr)
 	return localIPAddr.String()
 
@@ -297,7 +297,7 @@ func init() {
 		fetchOwnConfigurationFromEtcd(kapi, printername)
 		putOwnIPtoEtcd(kapi, printername, ip)
 		fetchBoardListFromConfig()
-		log.Error("%v, %v", ip, kapi)
+		log.Errorf("%v, %v\n", ip, kapi)
 
 		// write IP to etcd
 	}
@@ -324,7 +324,7 @@ func isPrintedLabelOnBoard(card *trello.Card) bool {
 	}
 	return res
 }
-func GetOutboundIP() net.IP {
+func getOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		log.Fatal(err)
@@ -335,10 +335,10 @@ func GetOutboundIP() net.IP {
 
 	return localAddr.IP
 }
-func getPrintedLabelId(board *trello.Board) {
+func getPrintedLabelID(board *trello.Board) {
 	labels, err := board.GetLabels(trello.Defaults())
 	if err != nil {
-		log.Fatal("cannot get labels from board: %v", err)
+		log.Fatalf("cannot get labels from board: %v\n", err)
 	}
 	for _, label := range labels {
 		if label.Name == configuration["newLabelAfterPrint"] {
@@ -387,21 +387,20 @@ func shortenStringIfToLong(instring string) string {
 	if err != nil {
 		log.Fatal("configvalue headLineCharsSkip is nan")
 	}
-	headLineMaxChars, err := strconv.Atoi(configuration["headLineMaxChars"])
+
 	if err != nil {
 		log.Fatal("configvalue headLineMaxChars is nan")
 	}
 	for len(shortendString) < headLineLength && iterator < len(wordList) {
-		if len(shortendString)+len(wordList[iterator]) > headLineMaxChars {
-			break
-		}
+
 		shortendString += " " + wordList[iterator]
 		iterator++
 	}
 	if iterator < len(wordList) {
 		shortendString += "..."
 	}
-	return shortendString
+
+	return strings.Trim(shortendString, " ")
 }
 
 func pdfBaseSetup() *gofpdf.Fpdf {
@@ -502,7 +501,7 @@ func writeLabel(pdf *gofpdf.Fpdf, card *trello.Card) string {
 	err := pdf.OutputFileAndClose(fileName)
 
 	if err != nil {
-		log.Error("cannot create pdf-file %v", err)
+		log.Errorf("cannot create pdf-file %v\n", err)
 
 	}
 	return fileName
@@ -528,7 +527,7 @@ func getLabels() []*trello.Card {
 
 	for _, board := range filterBoards(boards) {
 		boarListIDsToNames(board)
-		getPrintedLabelId(board)
+		getPrintedLabelID(board)
 		boardNameByID[board.ID] = board.Name
 		cardList = append(cardList, getMatchingCardsFromBoard(board)...)
 	}
@@ -572,7 +571,7 @@ func (r *Resultset) execCommand() {
 	r.DurationSecounds = int(r.CMDStoptime.Unix() - r.CmdStarttime.Unix())
 	if err != nil {
 		//todo: log.Fatalf("cmd.Run() failed with %s\n", err)
-		log.Errorln("Command failed %v err: ", err)
+		log.Errorf("Command failed %v err: \n", err)
 		r.SuccessfullExecution = false
 		r.ErrorStr = err.Error()
 
@@ -584,7 +583,7 @@ func printLabels(pdfList []string) {
 	for _, pdf := range pdfList {
 		commandResult := new(Resultset)
 		commandResult.OSCommand = "/usr/bin/lp"
-		commandResult.CommandArgs = []string{"-o", "media=" + configuration["printerMedia"], "-o",
+		commandResult.CommandArgs = []string{"-o", "fit-to-page", "-o", "media=" + configuration["printerMedia"], "-o",
 			configuration["printerOrientation"], "-n", configuration["numberOfCopiesPrnt"], "-d", configuration["printerName"], pdf}
 		commandResult.execCommand()
 		if commandResult.SuccessfullExecution == true {
