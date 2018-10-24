@@ -53,8 +53,8 @@ var (
 		"toPrintedLabelName": "PRINTME_DEVOPS",
 		"newLabelAfterPrint": "PRINTED",
 
-		"trelloUserName": "kls_drucker",
-
+		"trelloUserName":      "kls_drucker",
+		"configTrelloBoardID": "5bceb330ba13f689ee477774",
 		"boardsToWatch":       "DevOps 2020 - Board",
 		"printerMedia":        "Custom.62x100mm",
 		"printerOrientation":  "landscape",
@@ -69,6 +69,7 @@ var (
 	newLabelAfterPrtIDs = make(map[string]string)
 	boardNameByID       = make(map[string]string)
 	listNameByID        = make(map[string]string)
+	listIDByName        = make(map[string]string)
 	labelIDByName       = make(map[string]string)
 	cardByFileName      = make(map[string]*trello.Card)
 	printedCards        = make([]string, 0)
@@ -514,10 +515,23 @@ func getUUID() string {
 func boarListIDsToNames(board *trello.Board) {
 	lists, _ := board.GetLists(trello.Defaults())
 	for _, list := range lists {
-
+		// todo add this to cleanup
 		listNameByID[list.ID] = list.Name
+		listIDByName[list.Name] = list.ID
 
 	}
+
+}
+func createIPCardOnBoard() {
+	// does the board exist?
+	client := trello.NewClient(configuration["trelloAppKey"], configuration["trelloToken"])
+
+	board, err := client.GetBoard(configuration["configTrelloBoardID"], trello.Defaults())
+	if err != nil {
+		log.Infof("The configuration board can not be read. Check if it exist and this user can access it")
+		return
+	}
+	boarListIDsToNames(board)
 
 }
 func getLabels() []*trello.Card {
