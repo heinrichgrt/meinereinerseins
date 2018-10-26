@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -17,7 +16,8 @@ import (
 
 	"github.com/adlio/trello"
 	"github.com/boombuler/barcode/qr"
-	"github.com/coreos/etcd/client"
+	"github.com/denisbrodbeck/machineid"
+
 	"github.com/google/uuid"
 	"github.com/jung-kurt/gofpdf"
 	"github.com/jung-kurt/gofpdf/contrib/barcode"
@@ -48,14 +48,15 @@ var (
 		"rectY1":        "58.0",
 
 		// trello settings
-		"trelloAppKey":       "",
-		"trelloToken":        "",
-		"toPrintedLabelName": "PRINTME_DEVOPS",
-		"newLabelAfterPrint": "PRINTED",
-
+		"trelloAppKey":        "",
+		"trelloToken":         "",
+		"toPrintedLabelName":  "PRINTME_DEVOPS",
+		"newLabelAfterPrint":  "PRINTED",
+		"knechtID":            "",
 		"trelloUserName":      "kls_drucker",
 		"configTrelloBoardID": "5bceb330ba13f689ee477774",
 		"boardsToWatch":       "DevOps 2020 - Board",
+		"ConfigListOnBoard":   "IDs",
 		"printerMedia":        "Custom.62x100mm",
 		"printerOrientation":  "landscape",
 		"printerName":         "Brother_QL_700",
@@ -146,10 +147,10 @@ func getBlackRectPosFromString() []float64 {
 	return r
 }
 
-func checkCommandLineArgs() (bool, string) {
+func checkCommandLineArgs() {
 
-	networked := flag.Bool("networked", false, "get remote config")
-	netname := flag.String("netname", "chars", "Metric {chars|words|lines};.")
+	//networked := flag.Bool("networked", false, "get remote config")
+	//netname = flag.String("netname", "chars", "Metric {chars|words|lines};.")
 	debugset := flag.Bool("debug", false, "turn the noise on")
 	//configuration["boardsToWatch"] = *flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
 	boards := flag.String("boards", "DevOps2020 - Board", "board 1, board 2, board n")
@@ -179,7 +180,7 @@ func checkCommandLineArgs() (bool, string) {
 	tokenFile = ".token"
 	configFile = "config.cfg"
 
-	return *networked, *netname
+	return
 }
 func fetchIP() string {
 	localIPAddr := getOutboundIP()
@@ -198,68 +199,11 @@ func fetchConfiguration() {
 	fetchBoardListFromConfig()
 
 }
-func putOwnIPtoEtcd(kapi client.KeysAPI, name string, ip string) {
-	resp, err := kapi.Set(context.Background(), "/trelloprinter/IPs/"+name, ip, nil)
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		// print common key info
-		log.Debugf("Set is done. Metadata is %q\n", resp)
-	}
 
-}
-func fetchDefaultConfigFromEtcd(kapi client.KeysAPI) {
-	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/default", &client.GetOptions{Recursive: true})
-	if err != nil {
-		log.Fatal(err)
-	} else {
-
-		for _, n := range resp.Node.Nodes {
-			log.Debugf("Key: %q, Value: %q\n", n.Key, n.Value)
-			configuration[removePathFromKey(n.Key)] = n.Value
-		}
-	}
-}
-
-func fetchOwnConfigurationFromEtcd(kapi client.KeysAPI, printerName string) {
-	resp, err := kapi.Get(context.Background(), "/trelloprinter/config/"+printerName, &client.GetOptions{Recursive: true})
-	if err != nil {
-		log.Fatal(err)
-	} else {
-
-		for _, n := range resp.Node.Nodes {
-			log.Debugf("Key: %q, Value: %q\n", n.Key, n.Value)
-			configuration[removePathFromKey(n.Key)] = n.Value
-		}
-	}
-
-}
-func removePathFromKey(k string) string {
-	// there must be a better way...
-	//s := regexp.MustCompile("/").Split(k, 5)
-	s := strings.Split(k, "/")
-
-	return s[len(s)-1]
-}
 func fetchBoardListFromConfig() {
 	// try this.
 	boardsToWatch = strings.Split(configuration["boardsToWatch"], ",")
 	log.Debugf("board list: %v", boardsToWatch)
-}
-func setUpEtcdConnection() client.KeysAPI {
-	cfg := client.Config{
-		Endpoints:               []string{"http://127.0.0.1:2379"},
-		Transport:               client.DefaultTransport,
-		HeaderTimeoutPerRequest: time.Second,
-	}
-	c, err := client.New(cfg)
-	if err != nil {
-		log.Fatal(err)
-
-	}
-	kapi := client.NewKeysAPI(c)
-
-	return kapi
 }
 
 func readConfigFromFile(filename string) {
@@ -287,30 +231,24 @@ func readConfigFromFile(filename string) {
 
 func init() {
 
-	// continue here with flag...
-	networked, printername := checkCommandLineArgs()
+	checkCommandLineArgs()
 	fetchConfiguration()
-
-	if networked {
-		ip := fetchIP()
-		kapi := setUpEtcdConnection()
-		fetchDefaultConfigFromEtcd(kapi)
-		fetchOwnConfigurationFromEtcd(kapi, printername)
-		putOwnIPtoEtcd(kapi, printername, ip)
-		fetchBoardListFromConfig()
-		log.Errorf("%v, %v\n", ip, kapi)
-
-		// write IP to etcd
-	}
-
+	configuration["ip"] = fetchIP()
+	fetchBoardListFromConfig()
+	log.Infof("IP is %v", configuration["ip"])
 	dir, err := ioutil.TempDir(os.TempDir(), configuration["tmpDirPrefix"])
 	if err != nil {
 		log.Fatal(err)
 	}
-	//defer os.Remove(file.Name())
 	log.Debugf(dir)
 	configuration["tmpDirName"] = dir
+	id, err := machineid.ProtectedID("trelloknect")
+	if err != nil {
+		log.Fatal(err)
+	}
+	configuration["knechtID"] = id
 }
+
 func cleanUp(dirName string) {
 	os.RemoveAll(dirName)
 
@@ -522,16 +460,55 @@ func boarListIDsToNames(board *trello.Board) {
 	}
 
 }
+func getOwnCardFromPrinterBoard(c *trello.Client) *trello.Card {
+	board, err := c.GetBoard("5bceb330ba13f689ee477774", trello.Defaults())
+	if err != nil {
+		log.Fatalf("Can not get config board data")
+	}
+
+	cards, err := board.GetCards(trello.Defaults())
+	if err != nil {
+		log.Fatalf("Can not get cards from config board")
+	}
+	for _, card := range cards {
+		if card.Name == configuration["configCardDescription"] {
+			return card
+		}
+	}
+	return nil
+}
+
+func configCardDescription() string {
+	text := "Trelloprinter: " + configuration["printerName"] + "\n"
+	text = text + "IP: " + configuration["ip"] + "\n"
+	text = text + "Boards:" + configuration["boardsToWatch"] + "\n"
+	return text
+}
+func createOwnCard() {
+	// code
+}
+func updateOwnCard() {
+	// also code
+}
 func createIPCardOnBoard() {
 	// does the board exist?
 	client := trello.NewClient(configuration["trelloAppKey"], configuration["trelloToken"])
 
-	board, err := client.GetBoard(configuration["configTrelloBoardID"], trello.Defaults())
+	//board, err := client.GetBoard(configuration["configTrelloBoardID"], trello.Defaults())
+	board, err := client.GetBoard("5bceb330ba13f689ee477774", trello.Defaults())
 	if err != nil {
-		log.Infof("The configuration board can not be read. Check if it exist and this user can access it")
+		log.Fatalf("The configuration board: %v can not be reached. Check if it exist and this user can access it\n", configuration["configTrelloBoardID"])
 		return
 	}
 	boarListIDsToNames(board)
+	onwCard := getOwnCardFromPrinterBoard
+	if onwCard != nil {
+		updateOwnCard()
+	} else {
+		createOwnCard()
+	}
+	log.Infof("ListID: %v", listIDByName["IPs"])
+	log.Info("jump")
 
 }
 func getLabels() []*trello.Card {
@@ -622,6 +599,9 @@ func sweepOut() {
 func main() {
 	defer cleanUp(configuration["tmpDirName"])
 	//sleeptime, err := strconv.ad(configuration["waitIntervalSeconds"])
+
+	createIPCardOnBoard()
+
 	for {
 		cardList := getLabels()
 		pdfFileList := writeLabels(cardList)
